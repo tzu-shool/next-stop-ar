@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>下一站，記憶｜AR 測試</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&family=Noto+Sans+TC:wght@400;700;900&family=Space+Mono&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+  "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+} }
+</script>
+<style>
+  :root{
+    --void:#0b0d10; --ink:#e9e2d2; --ink-dim:#a6a190; --amber:#c98a3e; --teal:#6d827c; --paper:#efe6d3;
+    --serif:'Noto Serif TC',serif; --sans:'Noto Sans TC',-apple-system,sans-serif; --mono:'Space Mono',monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:#000;color:var(--ink);font-family:var(--serif);overflow:hidden;}
+  #ar{position:fixed;inset:0;}
+  #ar video{object-fit:cover;}
+  .screen{position:fixed;inset:0;z-index:20;background:var(--void);display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:calc(24px + env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));gap:16px;}
+  .screen[hidden]{display:none;}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.3em;color:var(--amber);}
+  h1{font-family:var(--sans);font-weight:900;font-size:clamp(30px,8vw,48px);margin:0;}
+  .screen p{max-width:440px;margin:0;color:var(--ink-dim);font-size:14px;line-height:1.9;}
+  .howto{max-width:440px;text-align:left;font-family:var(--sans);font-size:13px;line-height:1.9;color:var(--ink);
+    border:1px solid rgba(201,138,62,.35);background:rgba(201,138,62,.06);padding:12px 16px;}
+  .howto b{color:var(--amber);font-weight:700;}
+  .btn{font-family:var(--sans);font-weight:700;font-size:15px;background:var(--amber);color:#181205;border:0;padding:15px 38px;border-radius:2px;cursor:pointer;}
+  .btn.ghost{background:none;color:var(--ink);border:1px solid rgba(233,226,210,.35);font-weight:400;font-size:13px;padding:10px 18px;}
+  .status{font-family:var(--sans);font-size:12px;color:var(--amber);min-height:1.5em;}
+  .mode{display:flex;gap:8px;font-family:var(--sans);font-size:12px;}
+  .mode button{background:none;border:1px solid rgba(233,226,210,.3);color:var(--ink-dim);padding:7px 12px;border-radius:2px;font-family:inherit;font-size:12px;}
+  .mode button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);}
+
+  .hud{position:fixed;inset:0;z-index:10;pointer-events:none;}
+  .hud[hidden]{display:none;}
+  .topbar{position:absolute;top:calc(12px + env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));
+    display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:auto;}
+  .chip{font-family:var(--sans);font-size:11px;letter-spacing:.12em;color:var(--ink);background:rgba(11,13,16,.6);border:1px solid rgba(233,226,210,.2);padding:6px 10px;border-radius:2px;}
+  .seek{position:absolute;left:50%;top:42%;translate:-50% -50%;width:min(70vw,300px);aspect-ratio:1141/800;border:1px solid rgba(239,230,211,.55);
+    display:flex;align-items:flex-end;justify-content:center;transition:opacity .4s;}
+  .seek::before,.seek::after{content:"";position:absolute;inset:-6px;border:2px solid var(--amber);clip-path:polygon(0 0,18% 0,18% 3px,3px 3px,3px 18%,0 18%,0 0,100% 0,100% 18%,calc(100% - 3px) 18%,calc(100% - 3px) 3px,82% 3px,82% 0,100% 0,100% 100%,82% 100%,82% calc(100% - 3px),calc(100% - 3px) calc(100% - 3px),calc(100% - 3px) 82%,100% 82%,100% 100%,0 100%,0 82%,3px 82%,3px calc(100% - 3px),18% calc(100% - 3px),18% 100%,0 100%);}
+  .seek span{translate:0 calc(100% + 12px);font-family:var(--sans);font-size:13px;color:var(--ink);text-shadow:0 1px 6px #000;white-space:nowrap;}
+  .seek.found{opacity:0;}
+  .story{position:absolute;left:0;right:0;bottom:0;padding:60px max(16px,env(safe-area-inset-right)) calc(22px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+    background:linear-gradient(to top,rgba(11,13,16,.92) 30%,rgba(11,13,16,.6) 70%,transparent);text-align:center;pointer-events:auto;cursor:pointer;transition:opacity .4s;}
+  .story[hidden]{display:none;}
+  .speaker{font-family:var(--sans);font-weight:700;font-size:12px;letter-spacing:.16em;color:var(--amber);min-height:1.4em;margin-bottom:6px;}
+  .line{font-size:17px;line-height:1.85;min-height:3.7em;text-shadow:0 2px 8px rgba(0,0,0,.7);}
+  .line.dir{font-family:var(--sans);font-size:14px;color:var(--ink-dim);}
+  .line.sfx{font-family:var(--mono);font-size:13px;color:var(--teal);}
+  .hint{margin-top:8px;font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--ink-dim);opacity:.7;}
+  @media (prefers-reduced-motion: reduce){ .seek{transition:none;} }
+</style>
+</head>
+<body>
+<div id="ar"></div>
+
+<section class="screen" id="cover">
+  <div class="eyebrow">嘉義火車站前不義遺址 · AR 在家測試版</div>
+  <h1>下一站，記憶</h1>
+  <p>第三章〈回家的車票〉。潘木枝與病人會出現在手機畫面裡的照片前方。</p>
+  <div class="howto">
+    <b>使用方式</b><br>
+    1. 準備辨識圖：把「嘉義驛 1933」照片印出來，或顯示在電腦螢幕上。<br>
+    2. 選擇照片的擺放方式，按「啟動相機」並允許相機權限。<br>
+    3. 把手機對準整張照片，距離約 30–60 公分。<br>
+    4. 點畫面下方的文字往下播放。
+  </div>
+  <div class="mode" role="group" aria-label="照片擺放方式">
+    <button type="button" id="modeUpright" aria-pressed="true">照片直立（螢幕／牆上）</button>
+    <button type="button" id="modeFlat" aria-pressed="false">照片平放（桌上）</button>
+  </div>
+  <button class="btn" id="startBtn">啟動相機</button>
+  <div class="status" id="status"></div>
+</section>
+
+<section class="screen" id="ending" hidden>
+  <div class="eyebrow">測試結束</div>
+  <h1 style="font-size:28px">回家的車票</h1>
+  <p>這是現地 AR 的在家測試版。到嘉義站前廣場時，會改用現場拍下的辨識點觸發同樣的動畫。</p>
+  <button class="btn" id="replayBtn">再播一次</button>
+</section>
+
+<div class="hud" id="hud" hidden>
+  <div class="topbar"><span class="chip">第三章・回家的車票</span><button class="chip" id="restartBtn" style="cursor:pointer">重來</button></div>
+  <div class="seek" id="seek"><span>請把鏡頭對準整張照片</span></div>
+  <div class="story" id="story" hidden>
+    <div class="speaker" id="speaker"></div>
+    <div class="line" id="line"></div>
+    <div class="hint" id="hint">點這裡繼續</div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { MindARThree } from 'mindar-image-three';
+
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+let flat = false;
+$('modeUpright').onclick = () => { flat = false; $('modeUpright').setAttribute('aria-pressed','true'); $('modeFlat').setAttribute('aria-pressed','false'); };
+$('modeFlat').onclick = () => { flat = true; $('modeFlat').setAttribute('aria-pressed','true'); $('modeUpright').setAttribute('aria-pressed','false'); };
+
+/* ---------- 劇本：第三章（廣場版） ---------- */
+const BEATS = [
+  {type:'dir', text:'站前廣場。潘木枝提著醫師包，站在廣場上，車站入口就在他身後。', anim:'panIn'},
+  {type:'dir', text:'一位老人、一名孩子、一名普通市民依序走向他。他替老人拉好外套，摸摸孩子的頭，把藥包交給市民。', anim:'arrive'},
+  {type:'say', speaker:'潘木枝', text:'你知道我以前是做什麼的嗎？我是醫生。'},
+  {type:'say', speaker:'潘木枝', text:'每天看病、救人。有人沒錢，我也照樣替他看。'},
+  {type:'dir', text:'病人們向他道謝，一一轉身，走回照片裡的廣場深處，身影慢慢融進人群。', anim:'depart'},
+  {type:'say', speaker:'潘木枝', text:'以前，我常常在這裡送病人離開，也看過很多人趕著搭火車回家。'},
+  {type:'say', speaker:'潘木枝', text:'所以我一直以為……車站，是送人回家的地方。'},
+  {type:'sfx', text:'遠處傳來火車進站聲。', anim:'whistle'},
+  {type:'dir', text:'潘木枝看著你，從醫師包裡拿出一張車票。', anim:'ticket'},
+  {type:'say', speaker:'潘木枝', text:'可是後來才知道……有些人從這裡出發，卻再也沒有回家。'},
+  {type:'dir', text:'車票慢慢漂浮到你面前，目的地是「家」，然後兩個字慢慢消失。', anim:'home'},
+  {type:'say', speaker:'潘木枝', text:'人走了。但是一座城市，不能假裝什麼都沒有發生。'},
+  {type:'dir', text:'他的身影化成光點消散。車票落下。', anim:'out'}
+];
+
+/* ---------- 小型補間動畫系統 ---------- */
+const tweens = [];
+const ease = { out:t=>1-Math.pow(1-t,3), inOut:t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2, in:t=>t*t*t, lin:t=>t };
+function tween(o){ // {from,to,dur,delay,ease,set,done}
+  const tw = {...o, t:-(o.delay||0)}; tw.ease = ease[o.ease||'out']; if(REDUCED){ tw.dur = .001; tw.t = 0; }
+  tweens.push(tw); return tw;
+}
+function stepTweens(dt){
+  for (let i=tweens.length-1;i>=0;i--){ const tw=tweens[i]; tw.t+=dt; if(tw.t<0) continue;
+    const k=Math.min(1,tw.t/tw.dur), e=tw.ease(k); tw.set(tw.from+(tw.to-tw.from)*e);
+    if(k>=1){ tweens.splice(i,1); tw.done&&tw.done(); } }
+}
+
+/* ---------- 貼圖 ---------- */
+const PAX = {
+  elder:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 250"><g fill="#e9e2d2"><ellipse cx="38" cy="40" rx="15" ry="17"/><path d="M22 66 Q40 52 54 70 L58 240 L20 240 Z" transform="rotate(4 38 150)"/></g><line x1="62" y1="130" x2="66" y2="245" stroke="#e9e2d2" stroke-width="4"/></svg>`,
+  child:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 46 150"><g fill="#e9e2d2"><ellipse cx="23" cy="26" rx="13" ry="14"/><path d="M8 48 Q23 38 38 48 L42 146 L4 146 Z"/></g></svg>`,
+  adult:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 66 270"><g fill="#e9e2d2"><ellipse cx="33" cy="34" rx="15" ry="18"/><path d="M12 62 Q33 48 54 62 L60 266 L6 266 Z"/></g><rect x="44" y="140" width="16" height="12" rx="2" fill="#e9e2d2" opacity=".7"/></svg>`
+};
+function svgTexture(svg, w, h){
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const tex=new THREE.CanvasTexture(c); tex.colorSpace=THREE.SRGBColorSpace;
+  const img=new Image(); img.onload=()=>{ const g=c.getContext('2d'); g.shadowColor='rgba(200,214,207,.6)'; g.shadowBlur=18; g.drawImage(img,12,12,w-24,h-24); tex.needsUpdate=true; };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg); return tex;
+}
+function ticketTexture(withHome){
+  const c=document.createElement('canvas'); c.width=512; c.height=640; const g=c.getContext('2d');
+  if(!withHome){
+    g.fillStyle='#efe6d3'; g.fillRect(0,0,512,640);
+    g.fillStyle='#0b0d10'; g.beginPath(); g.arc(0,320,26,0,7); g.arc(512,320,26,0,7); g.fill();
+    g.strokeStyle='#c9bd9f'; g.setLineDash([10,8]); g.lineWidth=3; g.beginPath(); g.moveTo(40,120); g.lineTo(472,120); g.moveTo(40,520); g.lineTo(472,520); g.stroke();
+    g.fillStyle='#6d6248'; g.font='700 34px "Noto Sans TC",sans-serif'; g.textAlign='left'; g.fillText('嘉義 發',44,88); g.textAlign='right'; g.fillText('單程',468,88);
+    g.textAlign='center'; g.fillStyle='#8a642f'; g.font='700 40px "Noto Sans TC",sans-serif'; g.fillText('往',256,210);
+    g.fillStyle='#6d6248'; g.font='26px "Space Mono",monospace'; g.fillText('CHIAYI STATION',256,584);
+  } else {
+    g.fillStyle='#241d10'; g.font='700 190px "Noto Serif TC",serif'; g.textAlign='center'; g.fillText('家',256,430);
+  }
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
+}
+function plane(tex, w, h, opts={}){
+  const m=new THREE.MeshBasicMaterial({map:tex, transparent:true, opacity:0, depthWrite:false, side:THREE.DoubleSide, ...opts});
+  const geo=new THREE.PlaneGeometry(w,h); geo.translate(0,h/2,0); // 以腳底為原點
+  const mesh=new THREE.Mesh(geo,m); return mesh;
+}
+
+/* ---------- 粒子：環境飄塵、聚合、消散 ---------- */
+class Dust {
+  constructor(n){ this.n=n; this.geo=new THREE.BufferGeometry(); this.pos=new Float32Array(n*3); this.col=new Float32Array(n*3);
+    this.p=[]; for(let i=0;i<n;i++) this.p.push(this.ambient({}));
+    this.geo.setAttribute('position',new THREE.BufferAttribute(this.pos,3)); this.geo.setAttribute('color',new THREE.BufferAttribute(this.col,3));
+    this.mat=new THREE.PointsMaterial({size:.009,vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
+    this.points=new THREE.Points(this.geo,this.mat); this.points.frustumCulled=false; }
+  ambient(q){ return Object.assign(q,{mode:'amb',x:(Math.random()-.5)*1.1,y:Math.random()*.8,z:-.2+Math.random()*.6,vx:(Math.random()-.5)*.01,vy:.015+Math.random()*.03,a:.25+Math.random()*.35,ph:Math.random()*6.28}); }
+  gather(cx,cy,cz,w,h,count){ if(REDUCED) return; let k=0; for(const q of this.p){ if(k++>=count) break;
+    const tx=cx+(Math.random()-.5)*w, ty=cy+Math.random()*h; const ang=Math.random()*6.28, d=.3+Math.random()*.5;
+    Object.assign(q,{mode:'in',x:tx+Math.cos(ang)*d,y:ty+Math.sin(ang)*d,z:cz+(Math.random()-.5)*.4,tx,ty,tz:cz,t:0,life:1.4+Math.random()*.6,a:.9}); } }
+  scatter(cx,cy,cz,w,h,count){ if(REDUCED) return; let k=0; for(const q of this.p){ if(k++>=count) break;
+    Object.assign(q,{mode:'out',x:cx+(Math.random()-.5)*w,y:cy+Math.random()*h,z:cz+(Math.random()-.5)*.05,vx:.04+Math.random()*.12,vy:.08+Math.random()*.2,t:0,life:1.6+Math.random()*1.2,a:1}); } }
+  update(dt){
+    for(let i=0;i<this.n;i++){ const q=this.p[i]; let a=q.a;
+      if(q.mode==='amb'){ q.x+=q.vx*dt; q.y+=q.vy*dt; q.ph+=dt*2; if(q.y>.85) this.ambient(q), q.y=0; a=q.a*(.6+.4*Math.sin(q.ph)); }
+      else if(q.mode==='in'){ q.t+=dt; const k=Math.min(1,q.t/q.life); q.x+=(q.tx-q.x)*Math.min(1,dt*4); q.y+=(q.ty-q.y)*Math.min(1,dt*4); q.z+=(q.tz-q.z)*Math.min(1,dt*4); a=Math.sin(Math.PI*k); if(k>=1) this.ambient(q); }
+      else { q.t+=dt; const k=Math.min(1,q.t/q.life); q.x+=q.vx*dt; q.y+=q.vy*dt; a=1-k; if(k>=1) this.ambient(q); }
+      this.pos[i*3]=q.x; this.pos[i*3+1]=q.y; this.pos[i*3+2]=q.z;
+      this.col[i*3]=.93*a; this.col[i*3+1]=.89*a; this.col[i*3+2]=.82*a; }
+    this.geo.attributes.position.needsUpdate=true; this.geo.attributes.color.needsUpdate=true; }
+}
+
+/* ---------- 場景 ---------- */
+let mindar, renderer, scene, camera, stage, dust, pan, pax=[], ticket, home, clock=new THREE.Clock(), elapsed=0;
+let found=false, started=false, beat=-1, speaking=false;
+const PHOTO_H = 800/1141; // 辨識圖寬=1，高約 0.70
+
+function buildStage(anchor){
+  stage = new THREE.Group(); anchor.group.add(stage);
+  // 直立：人物站在照片下緣、略往鏡頭前方；平放：整組立起來
+  if (flat){ stage.rotation.x = Math.PI/2; stage.position.set(0,-PHOTO_H/2+.05,0); }
+  else stage.position.set(0,-PHOTO_H/2,.18);
+
+  // 地面陰影
+  const sh=new THREE.Mesh(new THREE.CircleGeometry(.5,48),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0,depthWrite:false}));
+  sh.rotation.x=-Math.PI/2; sh.scale.set(.8,.25,1); sh.position.set(0,.002,0); stage.add(sh); stage.userData.shadow=sh;
+
+  const tl=new THREE.TextureLoader(); const panTex=tl.load('pan.png'); panTex.colorSpace=THREE.SRGBColorSpace;
+  pan=plane(panTex,.40,.62); pan.position.set(.2,0,0); stage.add(pan);
+
+  const defs=[['elder',.13,.36,-.32],['child',.10,.24,-.19],['adult',.125,.40,-.05]];
+  pax=defs.map(([k,w,h,x],i)=>{ const m=plane(svgTexture(PAX[k], k==='child'?184:264, k==='child'?600:1000),w,h); m.position.set(x,0,.02*i); stage.add(m); m.userData.base={x,z:.02*i}; return m; });
+
+  ticket=plane(ticketTexture(false),.12,.15); home=plane(ticketTexture(true),.12,.15);
+  const tg=new THREE.Group(); tg.add(ticket); home.position.z=.001; tg.add(home); tg.position.set(.27,.28,.05); tg.scale.setScalar(.6); stage.add(tg); stage.userData.ticket=tg;
+
+  dust=new Dust(REDUCED?60:180); stage.add(dust.points);
+}
+
+/* ---------- 動畫狀態 ---------- */
+const A = {
+  panIn(){ tween({from:0,to:.95,dur:2,set:v=>pan.material.opacity=v});
+    tween({from:.85,to:1,dur:2.2,set:v=>pan.scale.set(1,v,1)});
+    tween({from:0,to:.35,dur:2,set:v=>stage.userData.shadow.material.opacity=v});
+    dust.gather(.2,.03,0,.28,.6,120); },
+  arrive(){ pax.forEach((m,i)=>{ m.position.x=m.userData.base.x-.15; m.position.z=m.userData.base.z;
+      tween({from:0,to:.7,dur:1.2,delay:i*.9,set:v=>m.material.opacity=v});
+      tween({from:m.userData.base.x-.15,to:m.userData.base.x,dur:2.4,delay:i*.9,ease:'inOut',set:v=>m.position.x=v}); }); },
+  depart(){ pax.forEach((m,i)=>{ const d=i*.7;
+      tween({from:m.position.z,to:-.9,dur:4,delay:d,ease:'inOut',set:v=>m.position.z=v});
+      tween({from:m.position.x,to:m.position.x*.4,dur:4,delay:d,ease:'inOut',set:v=>m.position.x=v});
+      tween({from:.7,to:0,dur:2.6,delay:d+1.6,set:v=>m.material.opacity=v}); m.userData.walking=[d,d+4]; m.userData.walkStart=elapsed; }); },
+  whistle(){ whistle(); },
+  ticket(){ const tg=stage.userData.ticket;
+      tween({from:0,to:1,dur:1.2,set:v=>{ ticket.material.opacity=v; home.material.opacity=v; }});
+      tween({from:.24,to:.28,dur:1.2,set:v=>tg.position.y=v}); },
+  home(){ const tg=stage.userData.ticket;
+      tween({from:tg.position.x,to:0,dur:2.6,ease:'inOut',set:v=>tg.position.x=v});
+      tween({from:tg.position.y,to:.36,dur:2.6,ease:'inOut',set:v=>tg.position.y=v});
+      tween({from:tg.position.z,to:.3,dur:2.6,ease:'inOut',set:v=>tg.position.z=v});
+      tween({from:.6,to:1.25,dur:2.6,ease:'inOut',set:v=>tg.scale.setScalar(v)});
+      tween({from:1,to:0,dur:2.6,delay:3,ease:'inOut',set:v=>home.material.opacity=v});
+      stage.userData.floating=true; },
+  out(){ const tg=stage.userData.ticket; stage.userData.floating=false;
+      dust.scatter(.2,0,0,.3,.62,180);
+      tween({from:pan.material.opacity,to:0,dur:1.8,set:v=>pan.material.opacity=v});
+      tween({from:1,to:1.08,dur:1.8,set:v=>pan.scale.set(1,v,1)});
+      tween({from:.35,to:0,dur:1.8,set:v=>stage.userData.shadow.material.opacity=v});
+      tween({from:tg.position.y,to:.02,dur:2.2,delay:1.2,ease:'in',set:v=>tg.position.y=v});
+      tween({from:0,to:-1.2,dur:2.2,delay:1.2,ease:'in',set:v=>tg.rotation.z=v*.3});
+      tween({from:1,to:0,dur:1.4,delay:2.8,set:v=>{ ticket.material.opacity=v; }});
+      setTimeout(()=>{ $('hud').hidden=true; $('ending').hidden=false; }, 5200); }
+};
+
+/* 用 Web Audio 合成一聲遠方的汽笛（不需音檔） */
+let actx=null;
+function whistle(){ try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); const t=actx.currentTime;
+  const g=actx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.12,t+.3); g.gain.setValueAtTime(.12,t+1.4); g.gain.linearRampToValueAtTime(0,t+2.2);
+  const f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=1400; f.connect(g); g.connect(actx.destination);
+  [440,554].forEach(fr=>{ const o=actx.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(fr,t); o.frequency.linearRampToValueAtTime(fr*.97,t+2.2); o.connect(f); o.start(t); o.stop(t+2.3); });
+}catch(e){} }
+
+/* ---------- 對白 ---------- */
+let typing=null;
+function showBeat(i){
+  const b=BEATS[i]; $('speaker').textContent=b.type==='say'?b.speaker:(b.type==='sfx'?'音效':'');
+  const el=$('line'); el.className='line'+(b.type==='dir'?' dir':b.type==='sfx'?' sfx':'');
+  speaking = b.type==='say';
+  if(typing) clearInterval(typing.id); const chars=[...b.text]; let k=0;
+  if(REDUCED){ el.textContent=b.text; typing=null; }
+  else { el.textContent=''; typing={full:b.text,id:setInterval(()=>{ k++; el.textContent=chars.slice(0,k).join(''); if(k>=chars.length){ clearInterval(typing.id); typing=null; } }, b.type==='say'?45:22)}; }
+  if(b.anim && A[b.anim]) A[b.anim]();
+  $('hint').textContent = i===BEATS.length-1 ? '' : '點這裡繼續';
+}
+$('story').addEventListener('click',()=>{
+  if(typing){ clearInterval(typing.id); $('line').textContent=typing.full; typing=null; return; }
+  if(beat < BEATS.length-1){ beat++; showBeat(beat); }
+});
+
+/* ---------- 啟動 ---------- */
+async function start(){
+  $('status').textContent='正在啟動相機……';
+  mindar = new MindARThree({ container:$('ar'), imageTargetSrc:'targets.mind', uiScanning:'no', uiLoading:'no', filterMinCF:.0001, filterBeta:.001 });
+  ({renderer, scene, camera} = mindar);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  const anchor = mindar.addAnchor(0);
+  buildStage(anchor);
+  anchor.onTargetFound = () => { found=true; $('seek').classList.add('found');
+    if(!started){ started=true; $('story').hidden=false; beat=0; showBeat(0); } };
+  anchor.onTargetLost = () => { found=false; $('seek').classList.remove('found'); };
+  await mindar.start();
+  $('cover').hidden=true; $('hud').hidden=false;
+  renderer.setAnimationLoop(()=>{
+    const dt=Math.min(.05,clock.getDelta()); elapsed+=dt; stepTweens(dt); dust.update(dt);
+    if(pan && !REDUCED){ // 呼吸、擺動、說話時微微發亮
+      pan.rotation.z=Math.sin(elapsed*.6)*.012; const br=1+Math.sin(elapsed*1.1)*.006; pan.scale.x=br;
+      pan.material.color.setScalar(speaking?1+Math.sin(elapsed*3)*.08:1);
+      pax.forEach(m=>{ const w=m.userData.walking; if(w){ const t=elapsed-m.userData.walkStart; if(t>w[0]&&t<w[1]) m.position.y=Math.abs(Math.sin(t*9))*.012; else m.position.y=0; } });
+      if(stage.userData.floating){ stage.userData.ticket.position.y += Math.sin(elapsed*1.6)*.0004; stage.userData.ticket.rotation.z=Math.sin(elapsed*.9)*.05; }
+    }
+    renderer.render(scene,camera);
+  });
+}
+$('startBtn').onclick = async () => {
+  $('startBtn').disabled=true;
+  try { await start(); }
+  catch(e){ $('startBtn').disabled=false; $('status').textContent='相機無法啟動。請確認：網址是 https 開頭、已允許相機權限，並改用 Safari 或 Chrome 開啟。'; console.error(e); }
+};
+$('restartBtn').onclick = () => location.reload();
+$('replayBtn').onclick = () => location.reload();
+</script>
+</body>
+</html>
